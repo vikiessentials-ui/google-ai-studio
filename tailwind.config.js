@@ -1,0 +1,60 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
+        display: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
+        script: ['"Alex Brush"', 'cursive'],
+      },
+      colors: {
+        royal: {
+          50: '#f0f6ff',
+          100: '#e0edfe',
+          200: '#bae0fd',
+          300: '#7cc7fb',
+          400: '#38a9f6',
+          500: '#0056D2',
+          600: '#0056D2',
+          700: '#0043a8',
+          800: '#003787',
+          900: '#062d6d',
+          950: '#0F172A',
+        },
+        primary: {
+          50: '#f0f6ff',
+          100: '#e0edfe',
+          200: '#bae0fd',
+          300: '#7cc7fb',
+          400: '#38a9f6',
+          500: '#0056D2',
+          600: '#0056D2',
+          700: '#0043a8',
+          800: '#003787',
+          900: '#062d6d',
+          950: '#0F172A',
+        },
+        accent: {
+          50: '#fefce8',
+          100: '#fef9c3',
+          200: '#fef08a',
+          300: '#fde047',
+          400: '#facc15',
+          500: '#eab308',
+          600: '#ca8a04',
+          700: '#a16207',
+          800: '#854d0e',
+          900: '#713f12',
+        },
+      },
+      animation: {
+        'fade-in-up': 'fadeInUp 0.6s ease-out forwards',
+        'fade-in': 'fadeIn 0.5s ease-out forwards',
+        'scale-in': 'scaleIn 0.4s ease-out forwards',
+        'slide-in-right': 'slideInRight 0.4s ease-out forwards',
+      },
+    },
+  },
+  plugins: [],
+};

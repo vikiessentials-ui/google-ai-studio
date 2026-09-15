@@ -1,0 +1,6 @@
+{
+  "name": "LEARN WITH FLOW",
+  "description": "100% free technology-learning platform with structured YouTube playlist courses, 8-question lesson quizzes, 15-question module assessments, 25-question final graduation exams, and verified certificates.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
