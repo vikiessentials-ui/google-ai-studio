@@ -13,19 +13,26 @@ export type QuizQuestion = {
 export type Lesson = {
   id: string;
   title: string;
-  duration: string;
+  duration?: string;
   youtubeVideoId?: string;
+  youtubeUrl?: string;
   videoUrl?: string;
-  summary: string;
-  order: number;
+  summary?: string;
+  order?: number;
+  position?: number;
+  quiz?: QuizQuestion[];
 };
+
+export type CourseLesson = Lesson;
 
 export type CourseModule = {
   id: string;
   title: string;
-  description: string;
-  order: number;
+  description?: string;
+  order?: number;
+  position?: number;
   lessons: Lesson[];
+  moduleAssessment?: QuizQuestion[];
 };
 
 export type Course = {
@@ -35,15 +42,16 @@ export type Course = {
   description: string;
   level: CourseLevel;
   thumbnail: string;
-  instructor: string;
-  youtubeChannel: string;
+  instructor?: string;
+  youtubeChannel?: string;
   playlistId: string;
   playlistUrl: string;
-  playlistTitle: string;
+  playlistTitle?: string;
   playlistStatus: PlaylistStatus;
   modules: CourseModule[];
+  finalExam?: QuizQuestion[];
   tags: string[];
-  certificateEligibility: boolean;
+  certificateEligibility?: boolean;
   createdAt: string;
   updatedAt?: string;
 };
@@ -55,21 +63,26 @@ export type QuizAttemptResult = {
   attemptedAt: string;
 };
 
-export type CourseProgress = {
-  courseId: string;
-  startedAt?: string;
-  lastActiveAt?: string;
-  completedLessons: Record<string, boolean>; // lessonId -> true
-  lessonQuizScores: Record<string, QuizAttemptResult>; // lessonId -> result
-  completedModules: Record<string, boolean>; // moduleId -> true
-  moduleAssessmentScores: Record<string, QuizAttemptResult>; // moduleId -> result
-  finalExam: {
-    passed: boolean;
-    score: number;
-    total: number;
-    attemptedAt?: string;
-  };
-  certificateId?: string;
+export type LessonProgress = {
+  completed?: boolean;
+  quizPassed?: boolean;
+  score?: number;
+  completedAt?: string;
+};
+
+export type ModuleProgress = {
+  completed?: boolean;
+  assessmentPassed?: boolean;
+  score?: number;
+  completedAt?: string;
+};
+
+export type FinalExamProgress = {
+  passed: boolean;
+  score: number;
+  total?: number;
+  completedAt?: string;
+  attemptedAt?: string;
 };
 
 export type CertificateRecord = {
@@ -87,4 +100,20 @@ export type CertificateRecord = {
   status: 'verified' | 'revoked';
   verificationUrl: string;
   skills?: string[];
+};
+
+export type CourseProgress = {
+  courseId: string;
+  startedAt?: string;
+  updatedAt?: string;
+  lastActiveAt?: string;
+  lessons: Record<string, LessonProgress>;
+  modules: Record<string, ModuleProgress>;
+  finalExam: FinalExamProgress;
+  certificate?: CertificateRecord | null;
+  certificateId?: string;
+  completedLessons: Record<string, boolean>;
+  lessonQuizScores: Record<string, QuizAttemptResult>;
+  completedModules: Record<string, boolean>;
+  moduleAssessmentScores: Record<string, QuizAttemptResult>;
 };

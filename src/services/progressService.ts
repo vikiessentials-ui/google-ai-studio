@@ -53,11 +53,17 @@ class ProgressService {
         courseId,
         startedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        lastActiveAt: new Date().toISOString(),
         lessons: {},
         modules: {},
+        completedLessons: {},
+        lessonQuizScores: {},
+        completedModules: {},
+        moduleAssessmentScores: {},
         finalExam: {
           passed: false,
           score: 0,
+          total: 25,
         },
         certificate: null,
       };
@@ -227,6 +233,7 @@ class ProgressService {
     progress.finalExam = {
       passed,
       score,
+      total: totalQuestions,
       completedAt: passed ? new Date().toISOString() : undefined,
     };
     progress.updatedAt = new Date().toISOString();

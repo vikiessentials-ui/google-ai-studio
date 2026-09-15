@@ -14,51 +14,32 @@ import {
 } from 'lucide-react';
 import type { Course, CourseLevel, PlaylistStatus } from '@/types';
 import { courseService } from '@/services/courseService';
+import { COURSE_CATEGORIES } from '@/data/coursesCatalog';
 
 type HomePageProps = {
   onOpenCourse: (course: Course) => void;
   onNavigateVerify: () => void;
   onNavigateAbout: () => void;
   onNavigateMission: () => void;
+  onNavigateAboutCeo: () => void;
   onNavigatePrivacy: () => void;
   onNavigateSecurity: () => void;
   onNavigateContact: () => void;
-  onToggleOwnerMode: () => void;
+  onOpenOwnerLogin: () => void;
 };
 
-const CATEGORIES = [
-  'All',
-  'Artificial Intelligence',
-  'Machine Learning',
-  'Cyber Security',
-  'Ethical Hacking',
-  'UI/UX Design',
-  'Front-End Development',
-  'Full Stack Development',
-  'Software Engineering',
-  'Python',
-  'JavaScript',
-  'Java',
-  'Data Science',
-  'SQL',
-  'Databases',
-  'Computer Networking',
-  'Linux',
-  'Cloud Computing',
-  'AWS',
-  'DevOps',
-  'System Design',
-];
+const CATEGORIES = ['All', ...COURSE_CATEGORIES];
 
 export default function HomePage({
   onOpenCourse,
   onNavigateVerify,
   onNavigateAbout,
   onNavigateMission,
+  onNavigateAboutCeo,
   onNavigatePrivacy,
   onNavigateSecurity,
   onNavigateContact,
-  onToggleOwnerMode,
+  onOpenOwnerLogin,
 }: HomePageProps) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [totalCourses, setTotalCourses] = useState(0);
@@ -444,6 +425,11 @@ export default function HomePage({
                     Our Mission
                   </button>
                 </li>
+                <li>
+                  <button onClick={onNavigateAboutCeo} className="hover:text-[#0056D2]">
+                    About the CEO
+                  </button>
+                </li>
               </ul>
             </div>
 
@@ -468,8 +454,8 @@ export default function HomePage({
                   </button>
                 </li>
                 <li>
-                  <button onClick={onToggleOwnerMode} className="text-slate-500 hover:text-amber-600 font-semibold">
-                    🛡️ Owner Mode Console
+                  <button onClick={onOpenOwnerLogin} className="text-slate-400 hover:text-slate-600">
+                    Owner Portal
                   </button>
                 </li>
               </ul>

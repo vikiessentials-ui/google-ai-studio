@@ -1,26 +1,47 @@
-import { GraduationCap, Shield, Award, Menu, X } from 'lucide-react';
+import { GraduationCap, Shield, Award, Menu, X, LogOut } from 'lucide-react';
 import { useState } from 'react';
 
 type HeaderProps = {
   currentView: string;
-  isOwnerMode: boolean;
+  isOwnerAuthenticated: boolean;
   onNavigateHome: () => void;
   onNavigateVerify: () => void;
   onNavigateAbout: () => void;
   onNavigateMission: () => void;
-  onToggleOwnerMode: () => void;
+  onNavigateAboutCeo: () => void;
+  onNavigatePrivacy: () => void;
+  onNavigateSecurity: () => void;
+  onNavigateContact: () => void;
+  onNavigateOwnerDashboard: () => void;
+  onOwnerLogout: () => void;
 };
 
 export default function Header({
   currentView,
-  isOwnerMode,
+  isOwnerAuthenticated,
   onNavigateHome,
   onNavigateVerify,
   onNavigateAbout,
   onNavigateMission,
-  onToggleOwnerMode,
+  onNavigateAboutCeo,
+  onNavigatePrivacy,
+  onNavigateSecurity,
+  onNavigateContact,
+  onNavigateOwnerDashboard,
+  onOwnerLogout,
 }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const navLinks = [
+    { id: 'home', label: 'Courses', action: onNavigateHome },
+    { id: 'about', label: 'About Us', action: onNavigateAbout },
+    { id: 'mission', label: 'Mission', action: onNavigateMission },
+    { id: 'about-ceo', label: 'About CEO', action: onNavigateAboutCeo },
+    { id: 'privacy', label: 'Privacy', action: onNavigatePrivacy },
+    { id: 'security', label: 'Security', action: onNavigateSecurity },
+    { id: 'contact', label: 'Contact', action: onNavigateContact },
+    { id: 'verify', label: 'Verify', action: onNavigateVerify },
+  ];
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E2E8F0] shadow-sm">
@@ -30,7 +51,7 @@ export default function Header({
           <button
             onClick={onNavigateHome}
             id="brand-logo-btn"
-            className="flex items-center gap-3 group text-left"
+            className="flex items-center gap-3 group text-left shrink-0"
           >
             <div className="w-10 h-10 rounded-xl bg-[#0056D2] text-white flex items-center justify-center shadow-md shadow-blue-500/20 group-hover:bg-blue-700 transition-colors">
               <GraduationCap className="w-6 h-6" />
@@ -46,80 +67,68 @@ export default function Header({
           </button>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1.5">
-            <button
-              onClick={onNavigateHome}
-              id="nav-courses-btn"
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                currentView === 'home'
-                  ? 'bg-blue-50 text-[#0056D2]'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              Courses
-            </button>
-
-            <button
-              onClick={onNavigateVerify}
-              id="nav-verify-btn"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                currentView === 'verify'
-                  ? 'bg-blue-50 text-[#0056D2]'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Award className="w-3.5 h-3.5 text-[#0056D2]" />
-              <span>Verify Certificate</span>
-            </button>
-
-            <button
-              onClick={onNavigateAbout}
-              id="nav-about-btn"
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                currentView === 'about'
-                  ? 'bg-blue-50 text-[#0056D2]'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              About
-            </button>
-
-            <button
-              onClick={onNavigateMission}
-              id="nav-mission-btn"
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                currentView === 'mission'
-                  ? 'bg-blue-50 text-[#0056D2]'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              Mission
-            </button>
+          <nav className="hidden lg:flex items-center gap-1">
+            {navLinks.map((link) => (
+              <button
+                key={link.id}
+                onClick={link.action}
+                id={`nav-${link.id}-btn`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                  currentView === link.id
+                    ? 'bg-blue-50 text-[#0056D2]'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                {link.label}
+              </button>
+            ))}
           </nav>
 
-          {/* Right Action: Owner Mode Toggle */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onToggleOwnerMode}
-              id="owner-mode-toggle-btn"
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                isOwnerMode
-                  ? 'bg-slate-900 text-amber-300 border-slate-800 shadow-md ring-2 ring-amber-400/40'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-              }`}
-              title="Toggle Owner Console"
-            >
-              <Shield className={`w-4 h-4 ${isOwnerMode ? 'text-amber-400' : 'text-slate-500'}`} />
-              <span className="hidden sm:inline">Owner Mode</span>
-              {isOwnerMode && (
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              )}
-            </button>
+          {/* Right Area: OWNER DASHBOARD if Authenticated, or Clean Verified Credential link */}
+          <div className="flex items-center gap-2">
+            {/* Authenticated Owner Navigation Item (Requirement 16 & 24: ONLY visible when authenticated) */}
+            {isOwnerAuthenticated ? (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onNavigateOwnerDashboard}
+                  id="nav-owner-dashboard-btn"
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                    currentView === 'owner'
+                      ? 'bg-slate-900 text-amber-300 border-slate-800 shadow-md ring-2 ring-amber-400/40'
+                      : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
+                  }`}
+                  title="Open Authenticated Owner Dashboard"
+                >
+                  <Shield className="w-4 h-4 text-amber-500" />
+                  <span>OWNER DASHBOARD</span>
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                </button>
 
-            {/* Mobile menu button */}
+                <button
+                  onClick={onOwnerLogout}
+                  id="owner-logout-btn"
+                  className="p-2 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
+                  title="Log out of Owner Session"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={onNavigateVerify}
+                id="header-quick-verify-btn"
+                className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-[#0056D2] bg-blue-50 hover:bg-blue-100 border border-blue-100 transition-colors"
+              >
+                <Award className="w-4 h-4 text-[#0056D2]" />
+                <span>Verify Credential</span>
+              </button>
+            )}
+
+            {/* Mobile menu hamburger button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100"
+              className="lg:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100"
+              aria-label="Toggle Navigation Menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -128,44 +137,48 @@ export default function Header({
 
         {/* Mobile menu dropdown */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-3 border-t border-slate-100 space-y-1">
-            <button
-              onClick={() => {
-                onNavigateHome();
-                setMobileMenuOpen(false);
-              }}
-              className="w-full text-left px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-lg"
-            >
-              Courses Catalog
-            </button>
-            <button
-              onClick={() => {
-                onNavigateVerify();
-                setMobileMenuOpen(false);
-              }}
-              className="w-full text-left px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-lg flex items-center gap-2"
-            >
-              <Award className="w-3.5 h-3.5 text-[#0056D2]" />
-              <span>Verify Certificate</span>
-            </button>
-            <button
-              onClick={() => {
-                onNavigateAbout();
-                setMobileMenuOpen(false);
-              }}
-              className="w-full text-left px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-lg"
-            >
-              About
-            </button>
-            <button
-              onClick={() => {
-                onNavigateMission();
-                setMobileMenuOpen(false);
-              }}
-              className="w-full text-left px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-lg"
-            >
-              Mission
-            </button>
+          <div className="lg:hidden py-3 border-t border-slate-100 space-y-1">
+            {navLinks.map((link) => (
+              <button
+                key={link.id}
+                onClick={() => {
+                  link.action();
+                  setMobileMenuOpen(false);
+                }}
+                className={`w-full text-left px-3.5 py-2 text-xs font-bold rounded-lg ${
+                  currentView === link.id
+                    ? 'bg-blue-50 text-[#0056D2]'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {link.label}
+              </button>
+            ))}
+
+            {isOwnerAuthenticated && (
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between px-3.5">
+                <button
+                  onClick={() => {
+                    onNavigateOwnerDashboard();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2 text-xs font-bold text-amber-900 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200"
+                >
+                  <Shield className="w-4 h-4 text-amber-600" />
+                  <span>OWNER DASHBOARD</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    onOwnerLogout();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="text-xs font-bold text-red-600 hover:underline"
+                >
+                  Logout
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

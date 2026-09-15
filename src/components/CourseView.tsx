@@ -10,12 +10,12 @@ import {
   RotateCcw,
   BookOpen,
   HelpCircle,
-  Clock,
   X
 } from 'lucide-react';
 import type { Course, QuizQuestion, CertificateRecord } from '@/types';
 import { progressService } from '@/services/progressService';
 import CertificateView from './Certificate';
+import YouTubePlayer from './YouTubePlayer';
 
 type CourseViewProps = {
   course: Course;
@@ -79,7 +79,8 @@ export default function CourseView({ course, onBack, onViewCertificate }: Course
   const currentLesson = currentModule?.lessons[selectedLessonIdx] || currentModule?.lessons[0];
 
   // Helper to shuffle array for randomized quiz attempts
-  function shuffleQuestions(originalQuestions: QuizQuestion[]): QuizQuestion[] {
+  function shuffleQuestions(originalQuestions?: QuizQuestion[]): QuizQuestion[] {
+    if (!originalQuestions) return [];
     const arr = [...originalQuestions];
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -226,6 +227,31 @@ export default function CourseView({ course, onBack, onViewCertificate }: Course
 
   const isFinalExamUnlocked = progressService.isFinalExamUnlocked(course);
 
+  // Calculate linear lesson index
+  let flatLessonIndex = 0;
+  for (let m = 0; m < selectedModuleIdx; m++) {
+    flatLessonIndex += course.modules[m]?.lessons?.length || 0;
+  }
+  flatLessonIndex += selectedLessonIdx;
+
+  function handleVideoIndexChange(linearIndex: number) {
+    let remaining = linearIndex;
+    for (let m = 0; m < course.modules.length; m++) {
+      const modLessonsCount = course.modules[m].lessons.length;
+      if (remaining < modLessonsCount) {
+        setSelectedModuleIdx(m);
+        setSelectedLessonIdx(remaining);
+        break;
+      }
+      remaining -= modLessonsCount;
+    }
+  }
+
+  function handleVideoEnded(_linearIndex: number) {
+    console.log('[CourseView] Lesson video ended. Prompting for 8-question assessment.');
+    handleStartLessonQuiz(selectedModuleIdx, selectedLessonIdx);
+  }
+
   // If viewing active certificate
   if (showCertificateView && activeCertificate) {
     return (
@@ -296,33 +322,15 @@ export default function CourseView({ course, onBack, onViewCertificate }: Course
           
           {/* LEFT COLUMN (8 cols): Official YouTube Player + Current Lesson Info */}
           <div className="lg:col-span-8 space-y-6">
-            {/* Player Container */}
-            <div className="bg-slate-950 rounded-2xl overflow-hidden shadow-md border border-slate-800 aspect-video relative flex items-center justify-center">
-              {course.playlistStatus === 'verified' && course.playlistId ? (
-                <iframe
-                  className="w-full h-full"
-                  src={`https://www.youtube-nocookie.com/embed/videoseries?list=${encodeURIComponent(course.playlistId)}&rel=0&modestbranding=1`}
-                  title={`${course.title} Learning Player`}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                />
-              ) : (
-                /* Elegant Pending Verification Notice - No Broken Black Player */
-                <div className="p-8 text-center max-w-md mx-auto text-white">
-                  <div className="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3 border border-amber-500/30">
-                    <Clock className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-lg font-bold text-slate-100">Playlist Pending Verification</h3>
-                  <p className="mt-2 text-xs text-slate-400 leading-relaxed">
-                    This course's YouTube learning playlist is currently queued for official verification.
-                    You can still review the syllabus curriculum, take the lesson quizzes, or update the playlist in Owner Mode.
-                  </p>
-                  <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 text-[11px] text-slate-300 border border-slate-700">
-                    <span>Channel: {course.youtubeChannel}</span>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Player Container with Official YouTube IFrame Player API */}
+            <YouTubePlayer
+              playlistId={course.playlistId}
+              playlistUrl={course.playlistUrl}
+              courseTitle={course.title}
+              selectedLessonIndex={flatLessonIndex}
+              onVideoIndexChange={handleVideoIndexChange}
+              onVideoEnded={handleVideoEnded}
+            />
 
             {/* Current Lesson Details Card */}
             {currentLesson && (

@@ -45,6 +45,8 @@ export default function OwnerDashboard({ onNavigateHome, onOpenCourse }: OwnerDa
   const [importDescription, setImportDescription] = useState('');
   const [importStatus, setImportStatus] = useState<PlaylistStatus>('verified');
   const [importError, setImportError] = useState('');
+  const [isValidatingPlaylist, setIsValidatingPlaylist] = useState(false);
+  const [fetchedVideoCount, setFetchedVideoCount] = useState<number | null>(null);
 
   // Edit Course Modal State
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
@@ -52,6 +54,32 @@ export default function OwnerDashboard({ onNavigateHome, onOpenCourse }: OwnerDa
   useEffect(() => {
     loadData();
   }, []);
+
+  async function handleAutoFetchPlaylist() {
+    if (!importInput.trim()) {
+      setImportError('Please enter a YouTube playlist URL or ID.');
+      return;
+    }
+    setIsValidatingPlaylist(true);
+    setImportError('');
+    try {
+      const res = await fetch(`/api/youtube/validate?url=${encodeURIComponent(importInput.trim())}`);
+      const data = await res.json();
+      if (data.valid) {
+        if (data.title) setImportTitle(data.title);
+        if (data.channelTitle) setImportChannel(data.channelTitle);
+        if (data.description) setImportDescription(data.description);
+        if (typeof data.videoCount === 'number') setFetchedVideoCount(data.videoCount);
+        setImportStatus('verified');
+      } else {
+        setImportError(data.message || 'Playlist unavailable or requires verification.');
+      }
+    } catch (err: any) {
+      setImportError('Failed to query YouTube API: ' + (err?.message || 'Server error'));
+    } finally {
+      setIsValidatingPlaylist(false);
+    }
+  }
 
   async function loadData() {
     setLoading(true);
@@ -82,14 +110,14 @@ export default function OwnerDashboard({ onNavigateHome, onOpenCourse }: OwnerDa
       {
         id: `${newId}-m1-l1`,
         title: 'Foundations & Architecture Overview',
-        youtubeUrl: playlistId ? `https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=${playlistId}` : '',
+        youtubeUrl: playlistId ? `https://www.youtube.com/playlist?list=${playlistId}` : '',
         position: 1,
         quiz: generateQuestionSet(importCategory, 8, `${newId}-m1-l1`),
       },
       {
         id: `${newId}-m1-l2`,
         title: 'Core Concepts & Hands-on Implementation',
-        youtubeUrl: playlistId ? `https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=${playlistId}` : '',
+        youtubeUrl: playlistId ? `https://www.youtube.com/playlist?list=${playlistId}` : '',
         position: 2,
         quiz: generateQuestionSet(importCategory, 8, `${newId}-m1-l2`),
       },
@@ -99,7 +127,7 @@ export default function OwnerDashboard({ onNavigateHome, onOpenCourse }: OwnerDa
       {
         id: `${newId}-m2-l1`,
         title: 'Advanced Patterns & Real-world Workflows',
-        youtubeUrl: playlistId ? `https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=${playlistId}` : '',
+        youtubeUrl: playlistId ? `https://www.youtube.com/playlist?list=${playlistId}` : '',
         position: 1,
         quiz: generateQuestionSet(importCategory, 8, `${newId}-m2-l1`),
       },
@@ -453,16 +481,29 @@ export default function OwnerDashboard({ onNavigateHome, onOpenCourse }: OwnerDa
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   YouTube Playlist URL or ID
                 </label>
-                <input
-                  type="text"
-                  placeholder="e.g. https://www.youtube.com/playlist?list=PLWKjhJtqVAbkmRvnFmOd4KhDdlK1oIq23"
-                  value={importInput}
-                  onChange={(e) => setImportInput(e.target.value)}
-                  className="w-full px-3 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0056D2]"
-                />
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Extracts playlist identifier. If not available yet, mark as 'Pending Verification'.
-                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. https://www.youtube.com/playlist?list=PLWKjhJtqVAbkmRvnFmOd4KhDdlK1oIq23"
+                    value={importInput}
+                    onChange={(e) => setImportInput(e.target.value)}
+                    className="flex-1 px-3 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0056D2]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAutoFetchPlaylist}
+                    disabled={isValidatingPlaylist || !importInput.trim()}
+                    className="px-3 py-2 bg-blue-50 text-[#0056D2] hover:bg-blue-100 disabled:opacity-50 text-xs font-bold rounded-lg transition-colors shrink-0"
+                  >
+                    {isValidatingPlaylist ? 'Validating...' : 'Auto-Fetch Info'}
+                  </button>
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1">
+                  <span>Server validates URL &amp; fetches title/channel via YouTube Data API.</span>
+                  {fetchedVideoCount !== null && (
+                    <span className="font-bold text-emerald-600">✔ Found {fetchedVideoCount} videos</span>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
