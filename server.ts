@@ -279,15 +279,21 @@ async function startServer() {
     });
   });
 
-  app.post('/api/owner/verify-session', (req: Request, res: Response) => {
+  const handleVerifySession = (req: Request, res: Response) => {
     const authHeader = req.headers.authorization || '';
-    const token = authHeader.replace('Bearer ', '').trim();
+    const tokenFromHeader = authHeader.replace('Bearer ', '').trim();
+    const tokenFromQuery = (req.query.token as string) || '';
+    const tokenFromBody = req.body?.token || '';
+    const token = tokenFromHeader || tokenFromQuery || tokenFromBody;
 
     if (token && token.startsWith('lwf_owner_')) {
-      return res.json({ valid: true, role: 'owner' });
+      return res.json({ authenticated: true, valid: true, role: 'owner' });
     }
-    return res.status(401).json({ valid: false });
-  });
+    return res.status(401).json({ authenticated: false, valid: false });
+  };
+
+  app.get('/api/owner/verify-session', handleVerifySession);
+  app.post('/api/owner/verify-session', handleVerifySession);
 
   // ==========================================
   // 4. COURSES CATALOG API (150+ Courses & Scalable)

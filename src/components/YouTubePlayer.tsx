@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle,
   Play,
   Pause,
   SkipBack,
@@ -9,14 +8,45 @@ import {
   Clock,
   ExternalLink,
   ShieldAlert,
-  HelpCircle,
   Video
 } from 'lucide-react';
 import { extractYouTubePlaylistId } from '@/lib/youtube';
 
+interface YTPlayerInstance {
+  playVideo: () => void;
+  pauseVideo: () => void;
+  nextVideo: () => void;
+  previousVideo: () => void;
+  playVideoAt: (index: number) => void;
+  getPlaylist: () => string[];
+  getPlaylistIndex: () => number;
+  getDuration: () => number;
+  getCurrentTime: () => number;
+  destroy: () => void;
+}
+
+interface YTEvent {
+  target: YTPlayerInstance;
+  data: number;
+}
+
 declare global {
   interface Window {
-    YT: any;
+    YT?: {
+      Player: new (
+        elementId: string,
+        config: {
+          height?: string | number;
+          width?: string | number;
+          playerVars?: Record<string, string | number>;
+          events?: {
+            onReady?: (event: YTEvent) => void;
+            onStateChange?: (event: YTEvent) => void;
+            onError?: (event: YTEvent) => void;
+          };
+        }
+      ) => YTPlayerInstance;
+    };
     onYouTubeIframeAPIReady?: () => void;
   }
 }
@@ -83,7 +113,22 @@ export default function YouTubePlayer({
   onVideoDurationChange,
 }: YouTubePlayerProps) {
   const containerId = useRef(`yt-player-${Math.random().toString(36).substring(2, 9)}`);
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<YTPlayerInstance | null>(null);
+
+  // Keep latest callbacks in refs so the YouTube lifecycle effect never needs to re-run
+  const onVideoIndexChangeRef = useRef(onVideoIndexChange);
+  onVideoIndexChangeRef.current = onVideoIndexChange;
+
+  const onVideoEndedRef = useRef(onVideoEnded);
+  onVideoEndedRef.current = onVideoEnded;
+
+  const onPlaylistLoadedRef = useRef(onPlaylistLoaded);
+  onPlaylistLoadedRef.current = onPlaylistLoaded;
+
+  const onVideoDurationChangeRef = useRef(onVideoDurationChange);
+  onVideoDurationChangeRef.current = onVideoDurationChange;
+
+  const initialIndexRef = useRef(selectedLessonIndex);
 
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -94,40 +139,38 @@ export default function YouTubePlayer({
   const [errorCode, setErrorCode] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
 
-  const cleanPlaylistId = extractYouTubePlaylistId(playlistId) || playlistId;
+  // Extract clean playlist ID
+  const cleanPlaylistId = extractYouTubePlaylistId(playlistId || playlistUrl || '') || '';
 
-  // Log playlist loading diagnostics as per Requirement 10
+  // Initialize YouTube Player
   useEffect(() => {
-    console.log('[LearnWithFlow YouTube Player] Initializing with Playlist ID:', cleanPlaylistId);
-  }, [cleanPlaylistId]);
-
-  // Load YouTube API & instantiate player
-  useEffect(() => {
-    let isCancelled = false;
-    setHasError(false);
-    setErrorMessage('');
-    setIsReady(false);
-
     if (!cleanPlaylistId) {
+      setHasError(true);
+      setErrorMessage('No valid YouTube playlist identifier provided for this course.');
       return;
     }
+
+    let isCancelled = false;
 
     loadYouTubeIframeApi().then(() => {
       if (isCancelled) return;
 
-      const element = document.getElementById(containerId.current);
-      if (!element || !window.YT || !window.YT.Player) return;
+      if (!window.YT || !window.YT.Player) {
+        console.warn('[LearnWithFlow YouTube Player] window.YT.Player unavailable after load.');
+        return;
+      }
+
+      // If player instance already exists, destroy before recreating
+      if (playerRef.current) {
+        try {
+          playerRef.current.destroy();
+        } catch {
+          // ignore
+        }
+        playerRef.current = null;
+      }
 
       try {
-        if (playerRef.current) {
-          try {
-            playerRef.current.destroy();
-          } catch {
-            // Ignore destruction errors
-          }
-          playerRef.current = null;
-        }
-
         console.log(`[LearnWithFlow YouTube Player] Mounting official player for list: ${cleanPlaylistId}`);
 
         playerRef.current = new window.YT.Player(containerId.current, {
@@ -136,7 +179,7 @@ export default function YouTubePlayer({
           playerVars: {
             listType: 'playlist',
             list: cleanPlaylistId,
-            index: selectedLessonIndex,
+            index: initialIndexRef.current,
             autoplay: 0,
             rel: 0,
             modestbranding: 1,
@@ -144,7 +187,7 @@ export default function YouTubePlayer({
             enablejsapi: 1,
           },
           events: {
-            onReady: (event: any) => {
+            onReady: (event: YTEvent) => {
               if (isCancelled) return;
               console.log('[LearnWithFlow YouTube Player] Official player is READY for playlist:', cleanPlaylistId);
               setIsReady(true);
@@ -154,7 +197,7 @@ export default function YouTubePlayer({
                 const playlist = event.target.getPlaylist();
                 if (Array.isArray(playlist)) {
                   setTotalVideos(playlist.length);
-                  onPlaylistLoaded?.(playlist);
+                  onPlaylistLoadedRef.current?.(playlist);
                 }
                 const idx = event.target.getPlaylistIndex();
                 if (typeof idx === 'number' && idx >= 0) {
@@ -163,13 +206,13 @@ export default function YouTubePlayer({
                 const dur = event.target.getDuration();
                 if (typeof dur === 'number' && dur > 0) {
                   setDuration(dur);
-                  onVideoDurationChange?.(dur);
+                  onVideoDurationChangeRef.current?.(dur);
                 }
               } catch (e) {
                 console.warn('[LearnWithFlow YouTube Player] Could not inspect initial playlist info:', e);
               }
             },
-            onStateChange: (event: any) => {
+            onStateChange: (event: YTEvent) => {
               if (isCancelled) return;
 
               // YT.PlayerState: -1 (UNSTARTED), 0 (ENDED), 1 (PLAYING), 2 (PAUSED), 3 (BUFFERING), 5 (CUED)
@@ -178,8 +221,9 @@ export default function YouTubePlayer({
 
               if (state === 0) {
                 // Video Ended: trigger lesson assessment completion
-                console.log('[LearnWithFlow YouTube Player] Video completed at playlist index:', currentPlaylistIndex);
-                onVideoEnded?.(currentPlaylistIndex);
+                const endedIdx = event.target.getPlaylistIndex?.() ?? 0;
+                console.log('[LearnWithFlow YouTube Player] Video completed at playlist index:', endedIdx);
+                onVideoEndedRef.current?.(endedIdx);
               }
 
               if (state === 1 || state === 2 || state === 0) {
@@ -187,19 +231,19 @@ export default function YouTubePlayer({
                   const idx = event.target.getPlaylistIndex();
                   if (typeof idx === 'number' && idx >= 0) {
                     setCurrentPlaylistIndex(idx);
-                    onVideoIndexChange?.(idx);
+                    onVideoIndexChangeRef.current?.(idx);
                   }
                   const dur = event.target.getDuration();
                   if (typeof dur === 'number' && dur > 0) {
                     setDuration(dur);
-                    onVideoDurationChange?.(dur);
+                    onVideoDurationChangeRef.current?.(dur);
                   }
                 } catch {
                   // ignore
                 }
               }
             },
-            onError: (event: any) => {
+            onError: (event: YTEvent) => {
               const code = event.data;
               console.error(
                 `[LearnWithFlow YouTube Player Error] Diagnostic Code: ${code} for Playlist ID: "${cleanPlaylistId}".`,
@@ -223,10 +267,11 @@ export default function YouTubePlayer({
             },
           },
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Failed to initialize YouTube IFrame Player.';
         console.error('[LearnWithFlow YouTube Player] Initialization exception:', err);
         setHasError(true);
-        setErrorMessage(err?.message || 'Failed to initialize YouTube IFrame Player.');
+        setErrorMessage(msg);
       }
     });
 
@@ -243,222 +288,228 @@ export default function YouTubePlayer({
     };
   }, [cleanPlaylistId]);
 
-  // Sync selectedLessonIndex from parent
+  // Sync selectedLessonIndex from parent when changed externally
   useEffect(() => {
     if (isReady && playerRef.current && typeof selectedLessonIndex === 'number') {
       try {
-        const currentIdx = playerRef.current.getPlaylistIndex?.();
-        if (typeof currentIdx === 'number' && currentIdx !== selectedLessonIndex) {
-          console.log(`[LearnWithFlow YouTube Player] Jumping to video at index: ${selectedLessonIndex}`);
-          playerRef.current.playVideoAt?.(selectedLessonIndex);
+        const currentIdx = playerRef.current.getPlaylistIndex();
+        if (currentIdx !== selectedLessonIndex) {
+          console.log(`[LearnWithFlow YouTube Player] Cueing selected lesson index: ${selectedLessonIndex}`);
+          playerRef.current.playVideoAt(selectedLessonIndex);
           setCurrentPlaylistIndex(selectedLessonIndex);
         }
       } catch (e) {
-        console.warn('[LearnWithFlow YouTube Player] playVideoAt failed:', e);
+        console.warn('[LearnWithFlow YouTube Player] Error synchronizing lesson index:', e);
       }
     }
   }, [selectedLessonIndex, isReady]);
 
-  // Playback control handlers
-  function handlePlayPause() {
-    if (!playerRef.current) return;
-    try {
-      if (isPlaying) {
-        playerRef.current.pauseVideo?.();
-      } else {
-        playerRef.current.playVideo?.();
-      }
-    } catch (e) {
-      console.warn('Playback control failed:', e);
+  // Controls
+  function handlePlay() {
+    if (playerRef.current) {
+      playerRef.current.playVideo();
     }
   }
 
-  function handlePrevious() {
-    if (!playerRef.current) return;
-    try {
-      playerRef.current.previousVideo?.();
-    } catch (e) {
-      console.warn('Previous video failed:', e);
+  function handlePause() {
+    if (playerRef.current) {
+      playerRef.current.pauseVideo();
     }
   }
 
   function handleNext() {
-    if (!playerRef.current) return;
-    try {
-      playerRef.current.nextVideo?.();
-    } catch (e) {
-      console.warn('Next video failed:', e);
+    if (playerRef.current) {
+      console.log('[LearnWithFlow YouTube Player] Advancing to next video');
+      playerRef.current.nextVideo();
     }
   }
 
-  function handleRetry() {
-    setHasError(false);
-    setErrorMessage('');
-    if (playerRef.current && cleanPlaylistId) {
-      try {
-        playerRef.current.loadPlaylist?.({
-          listType: 'playlist',
-          list: cleanPlaylistId,
-          index: selectedLessonIndex,
-        });
-      } catch {
-        // reload
-      }
+  function handlePrevious() {
+    if (playerRef.current) {
+      console.log('[LearnWithFlow YouTube Player] Returning to previous video');
+      playerRef.current.previousVideo();
     }
   }
 
-  // Format seconds to mm:ss
+  function handleReplay() {
+    if (playerRef.current) {
+      playerRef.current.playVideoAt(currentPlaylistIndex);
+    }
+  }
+
+  // Format seconds into MM:SS
   function formatTime(seconds: number): string {
-    if (!seconds || isNaN(seconds)) return '0:00';
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   }
 
-  // If no playlist ID provided or empty
-  if (!cleanPlaylistId) {
+  // Fallback UI when playlist cannot be played or has error
+  if (hasError || !cleanPlaylistId) {
+    const directWatchUrl = cleanPlaylistId
+      ? `https://www.youtube.com/playlist?list=${encodeURIComponent(cleanPlaylistId)}`
+      : playlistUrl || 'https://www.youtube.com';
+
     return (
-      <div className="bg-slate-900 rounded-2xl p-8 text-center text-white aspect-video flex flex-col items-center justify-center border border-slate-800">
-        <div className="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-3 border border-amber-500/30">
-          <Clock className="w-6 h-6" />
+      <div
+        className="w-full bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 p-8 text-center text-white flex flex-col items-center justify-center min-h-[360px]"
+        aria-label={`${courseTitle} Video Player Error`}
+      >
+        <div className="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-4 border border-amber-500/30">
+          <ShieldAlert className="w-7 h-7" />
         </div>
-        <h3 className="text-base font-bold text-slate-100">Playlist Pending Verification</h3>
-        <p className="mt-2 text-xs text-slate-400 max-w-md leading-relaxed">
-          This course's YouTube learning playlist is currently queued for official verification.
-          You can still review the course curriculum, test your skills on the lesson quizzes, or import a verified playlist in Owner Mode.
+
+        <h3 className="font-display text-lg sm:text-xl font-bold text-slate-100">
+          Playlist Unavailable or Requires Verification
+        </h3>
+
+        <p className="mt-2 text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+          {errorMessage ||
+            'This YouTube playlist is either restricted by the content creator, marked private, or pending official verification.'}
         </p>
+
+        {errorCode && (
+          <div className="mt-3 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-400">
+            Diagnostics: Error Code {errorCode} • Playlist ID: {cleanPlaylistId || 'None'}
+          </div>
+        )}
+
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href={directWatchUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-[#0056D2] hover:bg-blue-700 shadow-sm transition-colors"
+          >
+            <span>Open Playlist on YouTube</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+
+          <button
+            onClick={() => {
+              setHasError(false);
+              setIsReady(false);
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-colors"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Retry Player</span>
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-xl">
-      {/* Official YouTube Player Viewport Container */}
-      <div className="relative aspect-video w-full bg-black flex items-center justify-center overflow-hidden">
-        {/* The DOM element targeted by YT.Player */}
-        <div
-          id={containerId.current}
-          className={`w-full h-full ${hasError ? 'hidden' : 'block'}`}
-        />
+    <div
+      className="w-full bg-slate-950 rounded-2xl overflow-hidden shadow-lg border border-slate-800 flex flex-col"
+      aria-label={`${courseTitle} Video Player`}
+    >
+      {/* 16:9 Aspect Video Display */}
+      <div className="relative w-full aspect-video bg-black">
+        <div id={containerId.current} className="w-full h-full" />
 
-        {/* Loading Spinner overlay before player is ready */}
-        {!isReady && !hasError && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 text-white z-10">
-            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
-            <span className="text-xs text-slate-300 font-medium tracking-wide">
-              Loading Official YouTube Playlist...
-            </span>
-            <span className="text-[11px] text-slate-500 font-mono mt-1">
+        {/* Loading overlay before iframe API is ready */}
+        {!isReady && (
+          <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center text-white z-10">
+            <div className="w-10 h-10 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
+            <div className="text-xs font-bold text-slate-300 tracking-wide uppercase">
+              Loading YouTube Playlist...
+            </div>
+            <div className="text-[11px] text-slate-500 font-mono mt-1">
               ID: {cleanPlaylistId}
-            </span>
-          </div>
-        )}
-
-        {/* Clear, Helpful Error Overlay - Never a broken black player (Requirements 7 & 27) */}
-        {hasError && (
-          <div className="absolute inset-0 p-6 flex flex-col items-center justify-center text-center bg-slate-950 text-white z-20">
-            <div className="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-3 border border-amber-500/30">
-              <ShieldAlert className="w-6 h-6" />
-            </div>
-            <h3 className="text-base font-bold text-slate-100">
-              This YouTube learning resource is currently unavailable
-            </h3>
-            <p className="mt-2 text-xs text-slate-400 max-w-md leading-relaxed">
-              {errorMessage || 'The video or playlist could not be loaded due to privacy or embedding restrictions.'}
-            </p>
-
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-              <button
-                onClick={handleRetry}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white transition-colors border border-slate-700"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Retry Playback</span>
-              </button>
-
-              {playlistUrl && (
-                <a
-                  href={playlistUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-semibold text-white transition-colors"
-                >
-                  <span>Open Directly on YouTube</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              )}
-            </div>
-
-            <div className="mt-4 text-[10px] text-slate-500 font-mono">
-              Diagnostic code: {errorCode ?? 'N/A'} • Playlist ID: {cleanPlaylistId}
             </div>
           </div>
         )}
       </div>
 
-      {/* Embedded Player Navigation & Controls Bar (Requirements 2 & 6) */}
-      <div className="bg-slate-900 border-t border-slate-800 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-300">
+      {/* Integrated Player Control Bar */}
+      <div className="bg-slate-900 border-t border-slate-800 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-slate-300">
+        {/* Left: Previous / Play / Pause / Next Controls */}
         <div className="flex items-center gap-2">
-          {/* Previous Video */}
           <button
             onClick={handlePrevious}
             disabled={!isReady || currentPlaylistIndex <= 0}
-            id="yt-player-prev-btn"
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white transition-colors"
             title="Previous Video in Playlist"
+            aria-label="Previous Video"
           >
             <SkipBack className="w-4 h-4" />
           </button>
 
-          {/* Play / Pause Toggle */}
-          <button
-            onClick={handlePlayPause}
-            disabled={!isReady}
-            id="yt-player-play-btn"
-            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold disabled:opacity-40 flex items-center gap-1.5 transition-colors"
-            title={isPlaying ? 'Pause Video' : 'Play Video'}
-          >
-            {isPlaying ? (
-              <>
-                <Pause className="w-3.5 h-3.5" />
-                <span>Pause</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-3.5 h-3.5" />
-                <span>Play</span>
-              </>
-            )}
-          </button>
+          {isPlaying ? (
+            <button
+              onClick={handlePause}
+              disabled={!isReady}
+              className="p-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold transition-colors"
+              title="Pause Video"
+              aria-label="Pause Video"
+            >
+              <Pause className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              onClick={handlePlay}
+              disabled={!isReady}
+              className="p-2 rounded-lg bg-[#0056D2] hover:bg-blue-600 text-white font-bold transition-colors shadow-sm"
+              title="Play Video"
+              aria-label="Play Video"
+            >
+              <Play className="w-4 h-4" />
+            </button>
+          )}
 
-          {/* Next Video */}
           <button
             onClick={handleNext}
             disabled={!isReady || (totalVideos !== null && currentPlaylistIndex >= totalVideos - 1)}
-            id="yt-player-next-btn"
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white transition-colors"
             title="Next Video in Playlist"
+            aria-label="Next Video"
           >
             <SkipForward className="w-4 h-4" />
           </button>
+
+          <button
+            onClick={handleReplay}
+            disabled={!isReady}
+            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+            title="Replay Video from Beginning"
+            aria-label="Replay Video"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
         </div>
 
-        {/* Playlist Position and Video Duration Indicators */}
-        <div className="flex items-center gap-4 text-slate-400">
-          <div className="flex items-center gap-1.5">
-            <Video className="w-3.5 h-3.5 text-blue-400" />
-            <span className="font-semibold text-slate-200">
-              Video {currentPlaylistIndex + 1}
-              {totalVideos ? ` of ${totalVideos}` : ''}
+        {/* Center: Video Counter & Duration */}
+        <div className="flex items-center gap-3 text-xs font-semibold">
+          <div className="flex items-center gap-1.5 text-slate-400">
+            <Video className="w-3.5 h-3.5 text-[#0056D2]" />
+            <span>
+              Video <strong className="text-white">{currentPlaylistIndex + 1}</strong>
+              {totalVideos !== null ? ` of ${totalVideos}` : ''}
             </span>
           </div>
 
           {duration > 0 && (
-            <div className="flex items-center gap-1 text-slate-400 font-mono text-[11px]">
+            <div className="hidden sm:flex items-center gap-1 text-slate-400 font-mono text-[11px]">
               <Clock className="w-3 h-3 text-slate-500" />
               <span>{formatTime(duration)}</span>
             </div>
           )}
+        </div>
+
+        {/* Right: Direct YouTube Playlist Link */}
+        <div>
+          <a
+            href={`https://www.youtube.com/playlist?list=${encodeURIComponent(cleanPlaylistId)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+            title="Open Playlist on YouTube"
+          >
+            <span>YouTube</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
         </div>
       </div>
     </div>

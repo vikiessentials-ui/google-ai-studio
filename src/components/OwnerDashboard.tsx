@@ -74,8 +74,9 @@ export default function OwnerDashboard({ onNavigateHome, onOpenCourse }: OwnerDa
       } else {
         setImportError(data.message || 'Playlist unavailable or requires verification.');
       }
-    } catch (err: any) {
-      setImportError('Failed to query YouTube API: ' + (err?.message || 'Server error'));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Server error';
+      setImportError('Failed to query YouTube API: ' + msg);
     } finally {
       setIsValidatingPlaylist(false);
     }

@@ -247,7 +247,7 @@ export default function CourseView({ course, onBack, onViewCertificate }: Course
     }
   }
 
-  function handleVideoEnded(_linearIndex: number) {
+  function handleVideoEnded() {
     console.log('[CourseView] Lesson video ended. Prompting for 8-question assessment.');
     handleStartLessonQuiz(selectedModuleIdx, selectedLessonIdx);
   }

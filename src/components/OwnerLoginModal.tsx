@@ -46,7 +46,7 @@ export default function OwnerLoginModal({ isOpen, onClose, onSuccess }: OwnerLog
       } else {
         setError(data.message || 'Authentication failed. Invalid owner credentials.');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Owner authentication request failed:', err);
       // Fallback check if server offline or default dev mode
       if (password.trim() === 'admin123' || password.trim() === 'flowowner2026') {
